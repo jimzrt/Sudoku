@@ -23,13 +23,15 @@ GridLayout gridLayout;
 // - performance could be better
 // - 
 
+String[] solveStrategies = SolveStrategy.getAllStrategies();
+Solver solver = new Solver(solveStrategies[0]);
 
 void setup() {
 	size(800, 600);
 	frameRate(30);
 	
 	surface.setResizable(true);
-
+	
 	
 	gridLayout = new GridLayout(this,12,12, 10);
 	
@@ -39,7 +41,7 @@ void setup() {
 		public void onClickPressed(int x, int y) {
 			reset();
 		}
-	} );
+	});
 	gridLayout.addGridElement(resetButton, 0,1,3,1);
 	
 	Button loadButton = new Button("Load...");
@@ -48,7 +50,7 @@ void setup() {
 		public void onClickPressed(int x, int y) {
 			selectInput("Import Sudoku file", "importSudoku");
 		}
-	} );
+	});
 	gridLayout.addGridElement(loadButton, 0,2,3,1);
 	
 	Button saveButton = new Button("Save...");
@@ -57,19 +59,26 @@ void setup() {
 		public void onClickPressed(int x, int y) {
 			selectOutput("Export Sudoku file", "exportSudoku");
 		}
-	} );
+	});
 	gridLayout.addGridElement(saveButton, 0,3,3,1);
 	
-	SelectBox selectBox = new SelectBox("Solver", new String[]{"Backtrack", "Constraint"} );
+	SelectBox selectBox = new SelectBox("Solver", solveStrategies);
+	selectBox.setOnOptionSelectedListener(new OnOptionSelectedListener() {
+		@Override
+		public void onOptionSelected(int index, String option) {
+			solver.setCurrentStrategy(option);
+			println(index, option);
+		}
+	} );
 	gridLayout.addGridElement(selectBox, 0,4,3,1);
 	
-
-
+	
+	
 	final ImageButton playButton = new ImageButton("play-circle");
 	playButton.setOnClickPressedListener(new OnClickPressedListener() {
 		@Override
 		public void onClickPressed(int x, int y) {
-			if(playButton.getIconName().equals("play-circle")){
+			if (playButton.getIconName().equals("play-circle")) {
 				playButton.setIcon("pause-circle");
 				backgroundMusic.play();
 			} else {
@@ -78,46 +87,47 @@ void setup() {
 			}
 			
 		}
-	} );
-	gridLayout.addGridElement(playButton, 0, 10, 1, 1);
-
-	Slider volumeSlider = new Slider(300,100, 0,10,5);
-	volumeSlider.setOnSliderChangeListener(new OnSliderChangeListener(){
-		@Override
-		public void onSliderChange(int value){
-			backgroundMusic.amp(value/10.0f);
-		}
 	});
+	gridLayout.addGridElement(playButton, 0, 10, 1, 1);
+	
+	Slider volumeSlider = new Slider(300,100, 0,10,5);
+	volumeSlider.setOnSliderChangeListener(new OnSliderChangeListener() {
+		@Override
+		public void onSliderChange(int value) {
+			backgroundMusic.amp(value / 10.0f);
+		}
+	} );
 	gridLayout.addGridElement(volumeSlider, 1, 10, 2, 1);
-
+	
 	final SudokuWidget sudoku = new SudokuWidget(board);
 	gridLayout.addGridElement(sudoku, 4,1,8,9);
-
+	
 	Button backButton = new ImageButton("arrow-alt-circle-left");
 	backButton.setOnClickPressedListener(new OnClickPressedListener() {
 		@Override
 		public void onClickPressed(int x, int y) {
 			sudoku.revertLastMove();
 		}
-	} );
+	});
 	gridLayout.addGridElement(backButton, 4, 10,1,1);
-
+	
 	Button nextButton = new ImageButton("arrow-alt-circle-right");
 	nextButton.setOnClickPressedListener(new OnClickPressedListener() {
 		@Override
 		public void onClickPressed(int x, int y) {
 			sudoku.redoLastMove();
 		}
-	} );
+	});
 	gridLayout.addGridElement(nextButton, 5, 10,1,1);
-
+	
 	Button solveButton = new Button("Solve");
 	solveButton.setOnClickPressedListener(new OnClickPressedListener() {
 		@Override
 		public void onClickPressed(int x, int y) {
 			
 			long startTime = System.nanoTime();
-			solve();
+			solver.solve(board);
+			//solve();
 			long endTime = System.nanoTime();
 			
 			long duration = (endTime - startTime) / 1000000;  //divide by 1000000 to get milliseconds.
@@ -125,9 +135,9 @@ void setup() {
 			println("took " + duration + "ms");
 			
 		}
-	} );
+	});
 	gridLayout.addGridElement(solveButton, 6,10,2,1);
-
+	
 	Button hintButton = new Button("Hint");
 	hintButton.setOnClickPressedListener(new OnClickPressedListener() {
 		@Override
@@ -136,9 +146,9 @@ void setup() {
 			//TODO
 			
 		}
-	} );
+	});
 	gridLayout.addGridElement(hintButton, 8,10,2,1);
-
+	
 	
 	backgroundMusic = new SoundFile(this, "sounds/gui/out2.wav");
 	backgroundMusic.amp(0.5f);	
@@ -149,7 +159,6 @@ void reset() {
 	for (int i = 0; i < 9; i++) {
 		for (int j = 0; j < 9; j++) {
 			board[i][j] = 0;
-			//boardOrg[i][j] = 0;
 		}
 	}
 	
@@ -201,99 +210,10 @@ void importSudoku(File selection) {
 }
 
 
-
-
-
-void solve() {
-	
-	
-	// if (!checkValid()) {
-	// 	println("not valid!");
-	// 	return;
-	// }
-	// while(solve_crme()) {};
-	//solve_backtrack();
-	
-	
-	
-	Model model = new Model("Sudoku solver");
-	int n = 9;
-	
-	IntVar[][] rows = new IntVar[n][n];
-	IntVar[][] cols = new IntVar[n][n];
-	IntVar[][] carres = new IntVar[n][n];
-	for (int i = 0; i < n; i++) {
-		for (int j = 0; j < n; j++) {
-			if (board[i][j] > 0) {
-				rows[i][j] = model.intVar(board[i][j]);
-			} else {
-				rows[i][j] = model.intVar("c_" + i + "_" + j, 1, n, false);
-			}
-			cols[j][i] = rows[i][j];
-		}
-	}
-	
-	for (int i = 0; i < 3; i++) {
-		for (int j = 0; j < 3; j++) {
-			for (int k = 0; k < 3; k++) {
-				carres[j + k * 3][i] = rows[k * 3][i + j * 3];
-				carres[j + k * 3][i + 3] = rows[1 + k * 3][i + j * 3];
-				carres[j + k * 3][i + 6] = rows[2 + k * 3][i + j * 3];
-			}
-		}
-	}
-	
-	for (int i = 0; i < n; i++) {
-		model.allDifferent(rows[i], "AC").post();
-		model.allDifferent(cols[i], "AC").post();
-		model.allDifferent(carres[i], "AC").post();
-	}
-	
-	model.getSolver().solve();
-	
-	
-	for (int i = 0; i < n; i++) {
-		for (int j = 0; j < n; j++) {
-			board[i][j] = rows[i][j].getValue();
-		}
-	}
-	
-}
-
-
-void keyTyped() {
-
-	if (key == 's') {
-		solve();
-		return;
-	}
-
-}
-
-
 void draw() {
 	background(200, 200, 255);
 }
 
-
-
-
-public boolean checkValid() {
-	for (int y = 0; y < 9; y++) {
-		for (int x = 0; x < 9; x++) {
-			if (board[y][x] != 0) {
-				int val = board[y][x];
-				board[y][x] = 0;
-				boolean valid = isValid(y,x,val);
-				board[y][x] = val;
-				if (!valid) {
-					return false;
-				}
-			}
-		}
-	}
-	return true;
-}
 
 public boolean isValid(int x, int col, int num) {
 	//check y
@@ -325,57 +245,166 @@ public boolean isValid(int x, int col, int num) {
 }
 
 
-public boolean solve_backtrack()
+
+public enum SolveStrategy 
 {
-	int x = - 1;
-	int col = - 1;
-	boolean isEmpty = true;
-	for (int i = 0; i < 9; i++) 
+	BACKTRACK("Backtrack"), CONSTRAINT("Constraint");
+	
+	private String name;
+	
+	SolveStrategy(String name) {
+		this.name = name;
+	}
+	
+	public String getName() {
+		return name;
+	}
+	
+	public static SolveStrategy getByName(String name) {
+		for (SolveStrategy strategy : SolveStrategy.values()) {
+			if (strategy.getName().equals(name)) {
+				return strategy;
+			}
+		}
+		return null;
+	}
+	
+	public static String[] getAllStrategies() {
+		SolveStrategy[] values = SolveStrategy.values();
+		String[] strategies = new String[values.length];
+		for (int i = 0; i < values.length; i++) {
+			strategies[i] = values[i].getName();
+		}
+		return strategies;
+	}
+	
+}
+
+public class Solver {
+	SolveStrategy currentStrategy;
+	
+	public Solver(String strategy)
 	{
-		for (int j = 0; j < 9; j++) 
+		setCurrentStrategy(strategy);
+	}
+	
+	public void setCurrentStrategy(String solveStrategy) {
+		this.currentStrategy = SolveStrategy.getByName(solveStrategy);
+	}
+	
+	public SolveStrategy getCurrentStrategy() {
+		return currentStrategy;
+	}
+	
+	public boolean solve(int[][] board) {
+		switch(currentStrategy) {
+			case BACKTRACK:
+			println("solving via backtrack");
+			return solve_backtrack(board);
+			case CONSTRAINT:
+			println("solving via constraint");
+			return solve_constraint(board);
+			default:
+			break;
+		}
+		return false;
+	}
+	
+	private boolean solve_backtrack(int[][] board) {
+		int x = - 1;
+		int col = - 1;
+		boolean isEmpty = true;
+		for (int i = 0; i < 9; i++) 
 		{
-			if (board[i][j] == 0) 
+			for (int j = 0; j < 9; j++) 
 			{
-				x = i;
-				col = j;
-				
-				// We still have some remaining
-				// missing values in Sudoku
-				isEmpty = false;
+				if (board[i][j] == 0) 
+				{
+					x = i;
+					col = j;
+					// We still have some remaining
+					// missing values in Sudoku
+					isEmpty = false;
+					break;
+				}
+			}
+			if (!isEmpty) {
 				break;
 			}
 		}
-		if (!isEmpty) {
-			break;
+		// No empty space left
+		if (isEmpty) 
+		{
+			return true;
 		}
+		// Else for each-x backtrack
+		for (int num = 1; num <= 9; num++) 
+		{
+			if (isValid(x, col, num)) 
+			{
+				board[x][col] = num;
+				if (solve_backtrack(board)) 
+				{
+					return true;
+				}
+				else
+				{
+					// replace it
+					board[x][col] = 0;
+				}
+			}
+		}
+		return false;
+		
 	}
 	
-	// No empty space left
-	if (isEmpty) 
-	{
+	private boolean solve_constraint(int[][] board) {
+		Model model = new Model("Sudoku solver");
+		int n = 9;
+		
+		IntVar[][] rows = new IntVar[n][n];
+		IntVar[][] cols = new IntVar[n][n];
+		IntVar[][] carres = new IntVar[n][n];
+		for (int i = 0; i < n; i++) {
+			for (int j = 0; j < n; j++) {
+				if (board[i][j] > 0) {
+					rows[i][j] = model.intVar(board[i][j]);
+				} else {
+					rows[i][j] = model.intVar("c_" + i + "_" + j, 1, n, false);
+				}
+				cols[j][i] = rows[i][j];
+			}
+		}
+		
+		for (int i = 0; i < 3; i++) {
+			for (int j = 0; j < 3; j++) {
+				for (int k = 0; k < 3; k++) {
+					carres[j + k * 3][i] = rows[k * 3][i + j * 3];
+					carres[j + k * 3][i + 3] = rows[1 + k * 3][i + j * 3];
+					carres[j + k * 3][i + 6] = rows[2 + k * 3][i + j * 3];
+				}
+			}
+		}
+		
+		for (int i = 0; i < n; i++) {
+			model.allDifferent(rows[i], "AC").post();
+			model.allDifferent(cols[i], "AC").post();
+			model.allDifferent(carres[i], "AC").post();
+		}
+		
+		model.getSolver().solve();
+		
+		
+		for (int i = 0; i < n; i++) {
+			for (int j = 0; j < n; j++) {
+				board[i][j] = rows[i][j].getValue();
+			}
+		}
 		return true;
 	}
 	
-	// Else for each-x backtrack
-	for (int num = 1; num <= 9; num++) 
-	{
-		if (isValid(x, col, num)) 
-		{
-			board[x][col] = num;
-			if (solve_backtrack()) 
-			{
-				return true;
-			}
-			else
-			{
-				// replace it
-				board[x][col] = 0;
-			}
-		}
-	}
-	return false;
+	
 }
-
 
 
 
@@ -407,51 +436,55 @@ public interface OnSliderChangeListener {
 	void onSliderChange(int value);
 }
 
+public interface OnOptionSelectedListener {
+	void onOptionSelected(int index, String option);
+}
+
 
 public class Move {
 	Coordinate coordinate;
 	int valueBefore;
 	int valueAfter;
-	public Move(Coordinate coordinate, int valueBefore, int valueAfter){
+	public Move(Coordinate coordinate, int valueBefore, int valueAfter) {
 		this.coordinate = coordinate;
 		this.valueBefore = valueBefore;
 		this.valueAfter = valueAfter;
 	}
-
-	public Coordinate getCoordinate(){
+	
+	public Coordinate getCoordinate() {
 		return coordinate;
 	}
-
-	public int getValueBefore(){
+	
+	public int getValueBefore() {
 		return valueBefore;
 	}
-
-	public int getValueAfter(){
+	
+	public int getValueAfter() {
 		return valueAfter;
 	}
-
+	
 }
 
 public class Coordinate {
 	private int x;
 	private int y;
-	public Coordinate(int x, int y){
+	public Coordinate(int x, int y) {
 		this.x = x;
 		this.y = y;
 	}
-	int getX(){
+	int getX() {
 		return this.x;
 	}
 	int getY() {
 		return this.y;
 	}
-	void setX(int x){
+	void setX(int x) {
 		this.x = x;
 	}
-	void setY(int y){
+	void setY(int y) {
 		this.y = y;
 	}
-	void setXY(int x, int y){
+	void setXY(int x, int y) {
 		this.x = x;
 		this.y = y;
 	}
@@ -459,79 +492,79 @@ public class Coordinate {
 
 public class SudokuWidget extends WidgetBase {
 	
-
+	
 	int[][] board;
 	int[][] boardOriginal;
 	List<Move> moves = new ArrayList<Move>();
-	int moveIndex = -1;
+	int moveIndex = - 1;
 	int blinkTime;
 	boolean blinkOn;
-	Coordinate selectedCoordinate = new Coordinate(-1,-1);
-	Coordinate hoveredCoordinate = new Coordinate(-1,-1);
-
+	Coordinate selectedCoordinate = new Coordinate( - 1, - 1);
+	Coordinate hoveredCoordinate = new Coordinate( - 1, - 1);
+	
 	int lastX;
 	int lastY;
 	float cellSize;
-
-	public SudokuWidget(int[][] board){
+	
+	public SudokuWidget(int[][] board) {
 		this.board = board;
 		this.boardOriginal = new int[board.length][board[0].length];
 		cloneArray(board, boardOriginal);
 	}
-
-
-	public void revertLastMove(){
-		if(moveIndex >= 0){
+	
+	
+	public void revertLastMove() {
+		if (moveIndex >= 0) {
 			Move lastMove = moves.get(moveIndex);
 			Coordinate coordinate = lastMove.getCoordinate();
 			board[coordinate.getY()][coordinate.getX()] = lastMove.getValueBefore();
 			moveIndex--;
 		}
 	}
-
-	public void redoLastMove(){
-		if(moveIndex < moves.size() - 1){
+	
+	public void redoLastMove() {
+		if (moveIndex < moves.size() - 1) {
 			moveIndex++;
 			Move lastMove = moves.get(moveIndex);
 			Coordinate coordinate = lastMove.getCoordinate();
 			board[coordinate.getY()][coordinate.getX()] = lastMove.getValueAfter();
 		}
 	}
-
+	
 	private void cloneArray(int[][] src, int[][] dst) {
-	for (int i = 0; i < src.length; i++) {
-		for (int j = 0; j < src[i].length; j++) {	
-			dst[i][j] = src[i][j];
+		for (int i = 0; i < src.length; i++) {
+			for (int j = 0; j < src[i].length; j++) {	
+				dst[i][j] = src[i][j];
+			}
 		}
 	}
-}
-
-	@Override
-	public void onMouseEnter(int x, int y){}
 	
 	@Override
-	public void onMouseLeave(int x, int y){
-		hoveredCoordinate.setXY(-1, -1);
+	public void onMouseEnter(int x, int y) {}
+	
+	@Override
+	public void onMouseLeave(int x, int y) {
+		hoveredCoordinate.setXY( - 1, - 1);
 	}
 	
 	@Override
-	public void onMouseMove(int x, int y){
+	public void onMouseMove(int x, int y) {
 		int xIndex = floor((x - lastX) / cellSize);
 		int yIndex = floor((y - lastY) / cellSize);
 		if (xIndex < 0 || yIndex < 0 || xIndex > 8 || yIndex > 8 || boardOriginal[yIndex][xIndex] != 0) {
-			hoveredCoordinate.setXY(-1, -1);
+			hoveredCoordinate.setXY( - 1, - 1);
 			return;
 		}
 		hoveredCoordinate.setXY(xIndex, yIndex);
 	}
 	
 	@Override
-	public void onClickPressed(int x, int y){
+	public void onClickPressed(int x, int y) {
 		int xIndex = floor((x - lastX) / cellSize);
 		int yIndex = floor((y - lastY) / cellSize);
 		
 		if (xIndex < 0 || yIndex < 0 || xIndex > 8 || yIndex > 8 || boardOriginal[yIndex][xIndex] != 0) {
-			selectedCoordinate.setXY(-1, -1);
+			selectedCoordinate.setXY( - 1, - 1);
 			return;
 		}
 		selectedCoordinate.setXY(xIndex, yIndex);
@@ -540,28 +573,28 @@ public class SudokuWidget extends WidgetBase {
 	}
 	
 	@Override
-	public void onClickReleased(int x, int y){}
-
+	public void onClickReleased(int x, int y) {}
+	
 	@Override
-	public void onKeyTyped(char key){
-
+	public void onKeyTyped(char key) {
+		
 		if (selectedCoordinate.getX() == - 1) {
 			return;
 		}
 		
 		if (key == BACKSPACE) {
 			int oldVal = board[selectedCoordinate.getY()][selectedCoordinate.getX()];
-			if(oldVal == 0){
+			if (oldVal == 0) {
 				return;
 			}
-			while(moveIndex < moves.size()-1){
-				moves.remove(moves.size()-1);
+			while(moveIndex < moves.size() - 1) {
+				moves.remove(moves.size() - 1);
 			}
 			moves.add(new Move(new Coordinate(selectedCoordinate.getX(), selectedCoordinate.getY()), oldVal, 0));
-
+			
 			moveIndex++;
 			board[selectedCoordinate.getY()][selectedCoordinate.getX()] = 0;
-			selectedCoordinate.setXY(-1,-1);
+			selectedCoordinate.setXY( - 1, - 1);
 			return;
 		}
 		
@@ -570,19 +603,19 @@ public class SudokuWidget extends WidgetBase {
 		}
 		int val = Character.getNumericValue(key);
 		int oldVal = board[selectedCoordinate.getY()][selectedCoordinate.getX()];
-		if(val == oldVal){
+		if (val == oldVal) {
 			return;
 		}
-		while(moveIndex < moves.size()-1){
-				moves.remove(moves.size()-1);
+		while(moveIndex < moves.size() - 1) {
+			moves.remove(moves.size() - 1);
 		}
 		moves.add(new Move(new Coordinate(selectedCoordinate.getX(), selectedCoordinate.getY()), oldVal, val));
 		moveIndex++;
 		board[selectedCoordinate.getY()][selectedCoordinate.getX()] = val;
-		selectedCoordinate.setXY(-1,-1);
-
+		selectedCoordinate.setXY( - 1, - 1);
+		
 	}
-
+	
 	@Override
 	public void draw(int _x, int _y, int width, int height) {
 		// noFill();
@@ -590,7 +623,7 @@ public class SudokuWidget extends WidgetBase {
 		lastX = _x;
 		lastY = _y;
 		cellSize = min(width, height) / 9f;
-
+		
 		for (int i = 0; i < 9; i++) {
 			for (int j = 0; j < 9; j++) {
 				
@@ -652,7 +685,7 @@ public class SudokuWidget extends WidgetBase {
 		}
 		strokeWeight(1);
 	}
-
+	
 }
 
 public class SelectBox extends WidgetBase {
@@ -663,11 +696,13 @@ public class SelectBox extends WidgetBase {
 	
 	private boolean[] hovered;
 	private boolean clicked;
-		
+	
 	int lastX;
 	int lastY;
 	int lastWidth;
 	int lastHeight;
+	
+	OnOptionSelectedListener onOptionSelectedListener;
 	
 	public SelectBox(String text, String[] options) {
 		super(3, 1);
@@ -676,7 +711,11 @@ public class SelectBox extends WidgetBase {
 		this.text = text;
 		this.options = options;
 	}
-
+	
+	public void setOnOptionSelectedListener(OnOptionSelectedListener onOptionSelectedListener) {
+		this.onOptionSelectedListener = onOptionSelectedListener;
+	}
+	
 	@Override
 	public void onMouseEnter(int x, int y) {}
 	
@@ -701,6 +740,14 @@ public class SelectBox extends WidgetBase {
 		if (index == 0) {
 			clicked = true;
 		} else {
+			int new_index = index - 1;
+			if (new_index != selectedOption) {
+				if (onOptionSelectedListener != null) {
+					selectedOption = new_index;
+					onOptionSelectedListener.onOptionSelected(selectedOption, options[selectedOption]);
+				}
+				
+			}
 			selectedOption = index - 1;
 		}
 		
@@ -710,10 +757,10 @@ public class SelectBox extends WidgetBase {
 	public void onClickReleased(int x, int y) {
 		clicked = false;
 	}
-
+	
 	@Override
-	public void onKeyTyped(char key){}	
-
+	public void onKeyTyped(char key) {} 	
+	
 	@Override
 	public void draw(int x, int y, int width, int height) {
 		lastX = x;
@@ -762,11 +809,11 @@ public class Slider extends WidgetBase {
 	
 	private boolean hovered = false;
 	private boolean clicked = false;
-
+	
 	int lastWidth;
 	int lastX;
 	float lastHandleWidth;
-
+	
 	OnSliderChangeListener onSliderChangeListener;
 	
 	
@@ -776,8 +823,8 @@ public class Slider extends WidgetBase {
 		this.max = max;
 		this.value = value;
 	}
-
-	public void setOnSliderChangeListener(OnSliderChangeListener onSliderChangeListener){
+	
+	public void setOnSliderChangeListener(OnSliderChangeListener onSliderChangeListener) {
 		this.onSliderChangeListener = onSliderChangeListener;
 	}
 	
@@ -787,19 +834,19 @@ public class Slider extends WidgetBase {
 	
 	@Override
 	public void onMouseLeave(int x, int y) {
-		clicked=false;
+		clicked = false;
 	}
 	
 	@Override
 	public void onMouseMove(int x, int y) {
-		if(clicked){
-			int segmentWidth = round(lastWidth/(float)(max-min+1));
+		if (clicked) {
+			int segmentWidth = round(lastWidth / (float)(max - min + 1));
 			int offset =  x - lastX;
-			int index = floor(offset/segmentWidth);
-			int new_value =  min(max,min+index);
-			if(value != new_value){
+			int index = floor(offset / segmentWidth);
+			int new_value =  min(max,min + index);
+			if (value != new_value) {
 				value = new_value;
-				if(onSliderChangeListener != null){
+				if (onSliderChangeListener != null) {
 					onSliderChangeListener.onSliderChange(value);
 				}
 			}
@@ -809,13 +856,13 @@ public class Slider extends WidgetBase {
 	@Override
 	public void onClickPressed(int x, int y) {
 		clicked = true;
-		float segmentWidth = lastWidth/(float)(max-min+1);
+		float segmentWidth = lastWidth / (float)(max - min + 1);
 		int offset =  x - lastX;
-		int index = floor(offset/segmentWidth);
-		int new_value = min(max,min+index);
-		if(value != new_value){
+		int index = floor(offset / segmentWidth);
+		int new_value = min(max,min + index);
+		if (value != new_value) {
 			value = new_value;
-			if(onSliderChangeListener != null){
+			if (onSliderChangeListener != null) {
 				onSliderChangeListener.onSliderChange(value);
 			}
 		}
@@ -824,34 +871,34 @@ public class Slider extends WidgetBase {
 	@Override
 	public void onClickReleased(int x, int y) {
 		clicked = false;
-	}	
+	} 	
 	
 	@Override
-	public void onKeyTyped(char key){}
-
+	public void onKeyTyped(char key) {}
+	
 	@Override
 	public void draw(int x, int y, int width, int height) {
 		lastWidth = width;
 		lastX = x;
-
-		int lineHeight = round(height*0.1);
-		float handleWidth = width / (float)(max-min+1);
-		int handleHeight = lineHeight*3;
-
+		
+		int lineHeight = round(height * 0.1);
+		float handleWidth = width / (float)(max - min + 1);
+		int handleHeight = lineHeight * 3;
+		
 		lastHandleWidth = handleWidth;
-
+		
 		stroke(50);
 		noFill();
 		fill(50);
-		rect(round(x+handleWidth*0.5),round(y+height/2-lineHeight/2),width-handleWidth,lineHeight, 10);
-
+		rect(round(x + handleWidth * 0.5),round(y + height / 2 - lineHeight / 2),width - handleWidth,lineHeight, 10);
+		
 		
 		stroke(40);
 		fill(40);
-		rect(x+value*handleWidth,round(y+height/2 - handleHeight/2),handleWidth,handleHeight, 7);
+		rect(x + value * handleWidth,round(y + height / 2 - handleHeight / 2),handleWidth,handleHeight, 7);
 		textAlign(CENTER, CENTER);
 		textSize(min(width, height) * 0.3);
-		text("" + value, x + width/2, y + height/2 + handleHeight);
+		text("" + value, x + width / 2, y + height / 2 + handleHeight);
 	}
 	
 }
@@ -860,35 +907,35 @@ public class ImageButton extends Button {
 	PShape icon;
 	String iconName;
 	float ratio;
-
-	public ImageButton(String iconName){
+	
+	public ImageButton(String iconName) {
 		super("");
 		setIcon(iconName);
 	}
-
-	public void setIcon(String iconName){
+	
+	public void setIcon(String iconName) {
 		this.iconName = iconName;
-		this.icon = loadShape("icons/"+iconName+".svg");
+		this.icon = loadShape("icons/" + iconName + ".svg");
 		this.icon.disableStyle();
-		this.ratio = this.icon.getWidth()/(float)this.icon.getHeight();
+		this.ratio = this.icon.getWidth() / (float)this.icon.getHeight();
 	}
-
-	public String getIconName(){
+	
+	public String getIconName() {
 		return this.iconName;
 	}
-
+	
 	@Override
 	public void draw(int x, int y, int width, int height) {
-		int iconHeight = round(min(width,height)*0.5);
-		int iconWidth = round(iconHeight*ratio);
+		int iconHeight = round(min(width,height) * 0.5);
+		int iconWidth = round(iconHeight * ratio);
 		int col = clicked ? 150 : hovered ? 100 : 50;
 		//int alpha = 220;
 		stroke(col);
 		fill(col);
 		rect(x,y,width,height, 10);
-
+		
 		fill(255);
-		shape(icon, x + width / 2 - iconWidth/2, y + height / 2 - iconHeight/2, iconWidth, iconHeight);
+		shape(icon, x + width / 2 - iconWidth / 2, y + height / 2 - iconHeight / 2, iconWidth, iconHeight);
 	}
 }
 
@@ -908,8 +955,8 @@ public class Button extends WidgetBase {
 		super(width, height);
 		this.text = text;
 	}
-
-	public void setText(String text){
+	
+	public void setText(String text) {
 		this.text = text;
 	}
 	
@@ -937,9 +984,9 @@ public class Button extends WidgetBase {
 	public void onClickReleased(int x, int y) {
 		this.clicked = false;
 	}
-
+	
 	@Override
-	public void onKeyTyped(char key){}
+	public void onKeyTyped(char key) {}
 	
 	@Override
 	public void draw(int x, int y, int width, int height) {
@@ -964,8 +1011,8 @@ public abstract class WidgetBase implements Widget {
 	boolean hasOverlay;
 	int overlayWidth;
 	int overlayHeight;
-
-	public WidgetBase(){}
+	
+	public WidgetBase() {}
 	
 	public WidgetBase(int width, int height) {
 		
@@ -999,7 +1046,7 @@ public abstract class WidgetBase implements Widget {
 	public void setOnMouseMoveListener(OnMouseLeaveListener listener) {
 		this.onMouseLeaveListener = listener;
 	}
-
+	
 	public void setOnKeyTypedListener(OnKeyTypedListener listener) {
 		this.onKeyTypedListener = listener;
 	}
@@ -1055,7 +1102,7 @@ public abstract class WidgetBase implements Widget {
 	public OnMouseMoveListener getOnMouseMoveListener() {
 		return onMouseMoveListener;
 	}
-
+	
 	@Override
 	public OnKeyTypedListener getOnKeyTypedListener() {
 		return onKeyTypedListener;
@@ -1176,7 +1223,7 @@ public class GridLayout {
 		// Maybe add a callback when setting overlay for an element and only then sort?
 		Collections.sort(gridElements, comparator);
 		for (Widget gridElement : gridElements) {
-		 	Position pos = this.gridElementsMap.get(gridElement);
+			Position pos = this.gridElementsMap.get(gridElement);
 			int elementX = pos.getX();
 			int elementY = pos.getY();
 			int elementWidth = pos.getWidth();
@@ -1198,7 +1245,7 @@ public class GridLayout {
 		while(li.hasPrevious()) {
 			Widget gridElement = li.previous();
 			
-		 	Position pos = this.gridElementsMap.get(gridElement);
+			Position pos = this.gridElementsMap.get(gridElement);
 			int elementX = pos.getX();
 			int elementY = pos.getY();
 			int elementWidth = pos.getWidth();
@@ -1219,11 +1266,11 @@ public class GridLayout {
 		} 
 		return null; 
 	}
-
-	public void keyEvent(KeyEvent event){
-		if(event.getAction() == KeyEvent.RELEASE){
-
-			for(Widget widget : gridElements){
+	
+	public void keyEvent(KeyEvent event) {
+		if (event.getAction() == KeyEvent.RELEASE) {
+			
+			for (Widget widget : gridElements) {
 				widget.onKeyTyped(event.getKey());
 				if (widget.getOnKeyTypedListener() != null) {
 					widget.getOnKeyTypedListener().onKeyTyped(event.getKey());
@@ -1231,11 +1278,11 @@ public class GridLayout {
 			}
 		}
 	}
-
+	
 	
 	Widget prevElement;
 	public void mouseEvent(MouseEvent event) {
-		if(!initialDrawn){
+		if (!initialDrawn) {
 			return;
 		}
 		Widget gridElement = getSelectedElement(event.getX(), event.getY());
