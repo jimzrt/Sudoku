@@ -1,0 +1,182 @@
+NotificationManager notificationManager = new NotificationManager();
+notificationManager.add(NotificationType.SUCCESS, "Hallo");
+notificationManager.draw();
+
+
+
+public enum NotificationType
+{
+	SUCCESS, ERROR, INFO
+}
+
+public enum NotificationState
+{
+	STARTING, IDLE, ENDING
+}
+
+class Notification {
+	private NotificationType type;
+	private String text;
+	private NotificationState state = NotificationState.STARTING;
+	private int startTime = millis();
+	
+	Notification(NotificationType notificationType, String text) {
+		this.type = notificationType;
+		this.text = text;
+	}
+	
+	String getText() {
+		return text;
+	}
+	
+	int getStartTime() {
+		return startTime;
+	}
+	void setStartTime(int startTime) {
+		this.startTime = startTime;
+	}
+	public NotificationState getState() {
+		return state;
+	}
+	public void setState(NotificationState state) {
+		this.state = state;
+	}
+}
+
+class NotificationManager {
+	
+	
+	Map<NotificationState, Integer> notificationTimeMap = new HashMap<NotificationState, Integer>() {{
+			put(NotificationState.STARTING, 300);
+			put(NotificationState.IDLE, 1000);
+			put(NotificationState.ENDING, 300);
+		} };
+	
+	
+	private List<Notification> notifications = new ArrayList<Notification>();
+	private Set<Notification> notificationsToRemove = new HashSet<Notification>();
+	
+	public void add(NotificationType type, String text) {
+		Notification notification = new Notification(type, text);
+		this.notifications.add(notification);
+	}
+	
+	void draw() {
+		if (notifications.size() == 0) {
+			return;
+		}
+		
+		for (Notification notification : notifications) {
+			int time = millis();
+			if (time - notification.getStartTime() > notificationTimeMap.get(notification.getState())) {
+				switch(notification.getState()) {
+					case STARTING:
+					notification.setState(NotificationState.IDLE);
+					notification.setStartTime(time);
+					break;
+					case IDLE:
+					notification.setState(NotificationState.ENDING);
+					notification.setStartTime(time);
+					
+					break;
+					case ENDING:
+					notificationsToRemove.add(notification);
+					break;
+				}
+			}
+		}
+		// if (notificationsToRemove.size() == notifications.size()) {
+		notifications.removeAll(notificationsToRemove);
+		notificationsToRemove.clear();
+		// }
+		
+		
+		for (int i = 0; i < notifications.size(); i++) {
+			Notification notification = notifications.get(i);
+			if (notificationsToRemove.contains(notification)) {
+				continue;
+			}
+			int alphaText = 255;
+			int alphaBox = 180;
+			switch(notification.getState()) {
+				case STARTING : {
+					float precentage = (millis() - notification.getStartTime()) / (float)notificationTimeMap.get(notification.getState());
+					alphaText =  round(alphaText * precentage);
+					alphaBox =  round(alphaBox * precentage);
+					break;
+				}
+				case ENDING : {
+					float precentage = (millis() - notification.getStartTime()) / (float)notificationTimeMap.get(notifications.get(i).getState());
+					alphaText = round(alphaText * (1 - precentage));
+					alphaBox = round(alphaBox * (1 - precentage));
+					break;
+				}
+				//float precentage = (millis()-notifications.getStartTime()) / (float)notificationTimeMap.get(notifications.get(i).getState());
+			}
+			
+			int positionY = i * 200;
+			
+			fill(0,255,64,alphaBox);
+			noStroke();
+			rect(100, positionY, 300, 195);
+			fill(0,0,0,alphaText);
+			textAlign(CENTER,CENTER);
+			text(notifications.get(i).getText(), 100 + 150, positionY + 100);
+		}
+		
+	}
+	
+}
+
+
+
+synchronized boolean solve_crme() {
+	
+	for (int y = 0; y < 9; y++) {
+		for (int x = 0; x < 9; x++) {
+			
+			if (board[y][x] == 0) {
+				//empty cell found
+				//all possible candidates
+				List<Integer> candidates = new ArrayList<Integer>();
+				Collections.addAll(candidates, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+				
+				//check y
+				for (int col = 0; col < 9; col++) {
+					if (board[y][col] != 0) {
+						candidates.remove(new Integer(board[y][col]));
+					}
+				}
+				
+				//check x
+				for (int row = 0; row < 9; row++) {
+					if (board[row][x] != 0) {
+						candidates.remove(new Integer(board[row][x]));
+					}
+				}
+				
+				//check minigrid
+				int startCol = x - (x % 3);
+				int startRow = y - (y % 3);
+				for (int row = 0; row < 3; row++) {
+					for (int col = 0; col < 3; col++) {
+						if (board[row + startRow][col + startCol] != 0) {
+							candidates.remove(new Integer(board[row + startRow][col + startCol]));
+						}
+					}
+				}
+				
+				//candidates left:
+				//println("candidates: " +candidates);
+				
+				//found single possible value for cell
+				if (candidates.size() == 1) {
+					board[y][x] = candidates.get(0);
+					return true;
+				}
+			}
+		}
+	}
+	
+	return false;
+}
