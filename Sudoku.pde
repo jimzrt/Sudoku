@@ -12,14 +12,16 @@ import org.chocosolver.solver.Model;
 import org.chocosolver.solver.variables.IntVar;
 
 import processing.sound.*;
-processing.sound.Sound s;
+
+
 
 int[][]  board = new int[9][9];
-
-
 SoundFile backgroundMusic;
 GridLayout gridLayout;
 
+// TODO:
+// - performance could be better
+// - 
 
 
 void setup() {
