@@ -15,16 +15,23 @@ import processing.sound.*;
 
 
 
-int[][]  board = new int[9][9];
+SudokuWidget sudoku;
+int[][] board = new int[9][9];
 SoundFile backgroundMusic;
 GridLayout gridLayout;
 
+// input file picker uses seperate thread
+boolean inputFileChosen = false;
+
 // TODO:
+// - bug: devision by zero exception when getting mouse events before initial draw
 // - performance could be better
-// - 
+// - use board class with callbacks on change
+// - solving should throw an exception if it fails to notify user
+// - add notifications
 
 String[] solveStrategies = SolveStrategy.getAllStrategies();
-Solver solver = new Solver(solveStrategies[0]);
+Solver solver = new Solver(solveStrategies[0], board);
 
 void setup() {
 	size(800, 600);
@@ -49,6 +56,11 @@ void setup() {
 		@Override
 		public void onClickPressed(int x, int y) {
 			selectInput("Import Sudoku file", "importSudoku");
+			while(!inputFileChosen){
+				delay(100);
+			}
+			inputFileChosen = false;
+			sudoku.setBoard(board);
 		}
 	});
 	gridLayout.addGridElement(loadButton, 0,2,3,1);
@@ -99,7 +111,7 @@ void setup() {
 	} );
 	gridLayout.addGridElement(volumeSlider, 1, 10, 2, 1);
 	
-	final SudokuWidget sudoku = new SudokuWidget(board);
+	sudoku = new SudokuWidget(board);
 	gridLayout.addGridElement(sudoku, 4,1,8,9);
 	
 	Button backButton = new ImageButton("arrow-alt-circle-left");
@@ -126,7 +138,7 @@ void setup() {
 		public void onClickPressed(int x, int y) {
 			
 			long startTime = System.nanoTime();
-			solver.solve(board);
+			solver.solve();
 			//solve();
 			long endTime = System.nanoTime();
 			
@@ -142,7 +154,13 @@ void setup() {
 	hintButton.setOnClickPressedListener(new OnClickPressedListener() {
 		@Override
 		public void onClickPressed(int x, int y) {
-			
+			Coordinate selected = sudoku.getSelectedCoordinate();
+			if(selected.equals(Coordinate.EmptyCoordinate)){
+				return;
+			}
+			int value = solver.solve(selected.getX(), selected.getY());
+			board[selected.getY()][selected.getX()] = value;
+			println(value);
 			//TODO
 			
 		}
@@ -185,6 +203,7 @@ void exportSudoku(File selection) {
 void importSudoku(File selection) {
 	if (selection == null) {
 		println("Window was closed or the user hit cancel.");
+		inputFileChosen = true;
 		return;
 	}
 	println("User selected " + selection.getAbsolutePath());
@@ -204,9 +223,11 @@ void importSudoku(File selection) {
 					board[indexY][indexX] = Character.getNumericValue(c);
 				}
 			}
+			inputFileChosen = true;
 			return;
 		}
 	}
+	inputFileChosen = true;
 }
 
 
@@ -215,32 +236,49 @@ void draw() {
 }
 
 
-public boolean isValid(int x, int col, int num) {
+public boolean isValid(int[][] _board, int row, int col, int num) {
 	//check y
 	for (int c = 0; c < 9; c++) {
-		if (board[x][c] == num) {
+		if (_board[row][c] == num) {
 			return false;
 		}
 	}
 	
 	//check x
 	for (int r = 0; r < 9; r++) {
-		if (board[r][col] == num) {
+		if (_board[r][col] == num) {
 			return false;
 		}
 	}
 	
 	//check minigrid
 	int startCol = col - (col % 3);
-	int startRow = x - (x % 3);
+	int startRow = row - (row % 3);
 	for (int r = 0; r < 3; r++) {
 		for (int c = 0; c < 3; c++) {
-			if (board[r + startRow][c + startCol] == num) {
+			if (_board[r + startRow][c + startCol] == num) {
 				return false;
 			}
 		}
 	}
-	
+
+	return true;
+}
+
+public boolean validBoardConfiguration(int[][] _board) {
+	for (int y = 0; y < 9; y++) {
+		for (int x = 0; x < 9; x++) {
+			if (_board[y][x] != 0) {
+				int val = _board[y][x];
+				_board[y][x] = 0;
+				boolean valid = isValid(_board,y,x,val);
+				_board[y][x] = val;
+				if (!valid) {
+					return false;
+				}
+			}
+		}
+	}
 	return true;
 }
 
@@ -282,10 +320,12 @@ public enum SolveStrategy
 
 public class Solver {
 	SolveStrategy currentStrategy;
+	int[][] board;
 	
-	public Solver(String strategy)
+	public Solver(String strategy, int[][] board)
 	{
 		setCurrentStrategy(strategy);
+		this.board = board;
 	}
 	
 	public void setCurrentStrategy(String solveStrategy) {
@@ -295,32 +335,50 @@ public class Solver {
 	public SolveStrategy getCurrentStrategy() {
 		return currentStrategy;
 	}
+
 	
-	public boolean solve(int[][] board) {
+	public boolean solve() {
+		return solve(this.board);
+	}
+
+	private boolean solve(int[][] _board){
+		if(!validBoardConfiguration(_board)){
+			return false;
+		}
 		switch(currentStrategy) {
 			case BACKTRACK:
 			println("solving via backtrack");
-			return solve_backtrack(board);
+			return solve_backtrack(_board);
 			case CONSTRAINT:
 			println("solving via constraint");
-			return solve_constraint(board);
+			return solve_constraint(_board);
 			default:
 			break;
 		}
 		return false;
 	}
+
+	public int solve(int x, int y){
+		int[][] copy = cloneArray(board);
+		boolean success = solve(copy);
+		if(success){
+			return copy[y][x];
+		} else {
+			return 0;
+		}
+	}
 	
-	private boolean solve_backtrack(int[][] board) {
-		int x = - 1;
+	private boolean solve_backtrack(int[][] _board) {
+		int row = - 1;
 		int col = - 1;
 		boolean isEmpty = true;
 		for (int i = 0; i < 9; i++) 
 		{
 			for (int j = 0; j < 9; j++) 
 			{
-				if (board[i][j] == 0) 
+				if (_board[i][j] == 0) 
 				{
-					x = i;
+					row = i;
 					col = j;
 					// We still have some remaining
 					// missing values in Sudoku
@@ -337,28 +395,27 @@ public class Solver {
 		{
 			return true;
 		}
-		// Else for each-x backtrack
+		// Else for each row backtrack
 		for (int num = 1; num <= 9; num++) 
 		{
-			if (isValid(x, col, num)) 
+			if (isValid(_board, row, col, num)) 
 			{
-				board[x][col] = num;
-				if (solve_backtrack(board)) 
+				_board[row][col] = num;
+				if (solve_backtrack(_board)) 
 				{
 					return true;
 				}
 				else
 				{
 					// replace it
-					board[x][col] = 0;
+					_board[row][col] = 0;
 				}
 			}
 		}
 		return false;
-		
 	}
 	
-	private boolean solve_constraint(int[][] board) {
+	private boolean solve_constraint(int[][] _board) {
 		Model model = new Model("Sudoku solver");
 		int n = 9;
 		
@@ -367,8 +424,8 @@ public class Solver {
 		IntVar[][] carres = new IntVar[n][n];
 		for (int i = 0; i < n; i++) {
 			for (int j = 0; j < n; j++) {
-				if (board[i][j] > 0) {
-					rows[i][j] = model.intVar(board[i][j]);
+				if (_board[i][j] > 0) {
+					rows[i][j] = model.intVar(_board[i][j]);
 				} else {
 					rows[i][j] = model.intVar("c_" + i + "_" + j, 1, n, false);
 				}
@@ -397,10 +454,21 @@ public class Solver {
 		
 		for (int i = 0; i < n; i++) {
 			for (int j = 0; j < n; j++) {
-				board[i][j] = rows[i][j].getValue();
+				_board[i][j] = rows[i][j].getValue();
 			}
 		}
 		return true;
+	}
+
+
+	private int[][] cloneArray(int[][] src) {
+		int[][] dst = new int[src.length][src[0].length];
+		for (int i = 0; i < src.length; i++) {
+			for (int j = 0; j < src[i].length; j++) {	
+				dst[i][j] = src[i][j];
+			}
+		}
+		return dst;
 	}
 	
 	
@@ -465,30 +533,7 @@ public class Move {
 	
 }
 
-public class Coordinate {
-	private int x;
-	private int y;
-	public Coordinate(int x, int y) {
-		this.x = x;
-		this.y = y;
-	}
-	int getX() {
-		return this.x;
-	}
-	int getY() {
-		return this.y;
-	}
-	void setX(int x) {
-		this.x = x;
-	}
-	void setY(int y) {
-		this.y = y;
-	}
-	void setXY(int x, int y) {
-		this.x = x;
-		this.y = y;
-	}
-}
+
 
 public class SudokuWidget extends WidgetBase {
 	
@@ -507,11 +552,17 @@ public class SudokuWidget extends WidgetBase {
 	float cellSize;
 	
 	public SudokuWidget(int[][] board) {
+		setBoard(board);
+	}
+
+	public void setBoard(int[][] board){
 		this.board = board;
-		this.boardOriginal = new int[board.length][board[0].length];
-		cloneArray(board, boardOriginal);
+		this.boardOriginal = cloneArray(board);
 	}
 	
+	public Coordinate getSelectedCoordinate(){
+		return selectedCoordinate;
+	}
 	
 	public void revertLastMove() {
 		if (moveIndex >= 0) {
@@ -531,12 +582,14 @@ public class SudokuWidget extends WidgetBase {
 		}
 	}
 	
-	private void cloneArray(int[][] src, int[][] dst) {
+	private int[][] cloneArray(int[][] src) {
+		int[][] dst = new int[src.length][src[0].length];
 		for (int i = 0; i < src.length; i++) {
 			for (int j = 0; j < src[i].length; j++) {	
 				dst[i][j] = src[i][j];
 			}
 		}
+		return dst;
 	}
 	
 	@Override
